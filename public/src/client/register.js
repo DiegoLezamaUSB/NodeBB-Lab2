@@ -114,7 +114,35 @@ define('forum/register', [
 		$('#username').trigger('focus');
 	};
 
-	function validateUsername(username, callback) {
+	//Solo falta definir el uso de las variables notify bien
+	function suggestUsername(username, callback) {
+		let valid = false;
+		let suggestion = "";
+		while(!valid){
+			suggestion = username + Math.floor(Math.random() * 1000);
+			const userslug = slugify(suggestion);
+			const exists = Promise.allSettled([
+				api.head(`/users/bySlug/${userslug}`, {}),
+				api.head(`/groups/${suggestion}`, {}),
+			]).then((results) => {
+				if (results.every(obj => obj.status === 'rejected')) {
+					return false;
+				} else {
+					return true;
+				}
+			});
+			if(utils.isUserNameValid(suggestion) &&
+			   		suggestion.length <= ajaxify.data.maximumUsernameLength &&
+			   		!exists){
+				valid = true;
+				return suggestion;
+			}
+		}
+		console.log(valid);
+  		return suggestion;
+	}
+
+	function validateUsername(username) {
 		callback = callback || function () {};
 
 		const username_notify = $('#username-notify');
@@ -135,7 +163,7 @@ define('forum/register', [
 				if (results.every(obj => obj.status === 'rejected')) {
 					showSuccess(usernameInput, username_notify, successIcon);
 				} else {
-					showError(usernameInput, username_notify, '[[error:username-taken]]');
+					showError(usernameInput, username_notify, `Username taken. Maybe try "${suggestUsername(username)}"`);
 				}
 
 				callback();
@@ -183,6 +211,18 @@ define('forum/register', [
 	}
 
 	function showError(input, element, msg) {
+		translator.translate(msg, function (msg) {
+			input.attr('aria-invalid', 'true');
+			element.html(msg);
+			element.parent()
+				.removeClass('register-success')
+				.addClass('register-danger');
+			element.show();
+		});
+		validationError = true;
+	}
+
+	function showErrorUsername(input, element, msg) {
 		translator.translate(msg, function (msg) {
 			input.attr('aria-invalid', 'true');
 			element.html(msg);
